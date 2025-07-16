@@ -40,11 +40,15 @@ use {
         },
         time::Duration,
     },
-    tokio::sync::{broadcast::Receiver, watch},
+    tokio::{
+        sync::{broadcast::Receiver, watch},
+        time::Instant,
+    },
 };
 
 const PING_INTERVAL_DURATION: Duration = Duration::from_secs(30);
-const MAX_CLIENT_MESSAGE_SIZE: usize = 100 * 1024; // 100 KiB
+const MAX_CLIENT_MESSAGE_SIZE: usize = 1025 * 1024; // 1 MiB
+const MAX_CONNECTION_DURATION: Duration = Duration::from_secs(24 * 60 * 60); // 24 hours
 
 /// The maximum number of bytes that can be sent per second per IP address.
 /// If the limit is exceeded, the connection is closed.
@@ -151,6 +155,8 @@ enum ClientMessage {
         binary: bool,
         #[serde(default)]
         allow_out_of_order: bool,
+        #[serde(default)]
+        ignore_invalid_price_ids: bool,
     },
     #[serde(rename = "unsubscribe")]
     Unsubscribe { ids: Vec<PriceIdInput> },
@@ -250,6 +256,7 @@ pub struct Subscriber<S> {
     sender: SplitSink<WebSocket, Message>,
     price_feeds_with_config: HashMap<PriceIdentifier, PriceFeedClientConfig>,
     ping_interval: tokio::time::Interval,
+    connection_deadline: Instant,
     exit: watch::Receiver<bool>,
     responded_to_ping: bool,
 }
@@ -278,6 +285,7 @@ where
             sender,
             price_feeds_with_config: HashMap::new(),
             ping_interval: tokio::time::interval(PING_INTERVAL_DURATION),
+            connection_deadline: Instant::now() + MAX_CONNECTION_DURATION,
             exit: crate::EXIT.subscribe(),
             responded_to_ping: true, // We start with true so we don't close the connection immediately
         }
@@ -321,6 +329,26 @@ where
                 }
                 self.responded_to_ping = false;
                 self.sender.send(Message::Ping(vec![])).await?;
+                Ok(())
+            },
+            _ = tokio::time::sleep_until(self.connection_deadline) => {
+                tracing::info!(
+                    id = self.id,
+                    ip = ?self.ip_addr,
+                    "Connection timeout reached (24h). Closing connection.",
+                );
+                self.sender
+                    .send(
+                        serde_json::to_string(&ServerMessage::Response(
+                            ServerResponseMessage::Err {
+                                error: "Connection timeout reached (24h)".to_string(),
+                            },
+                        ))?
+                        .into(),
+                    )
+                    .await?;
+                self.sender.close().await?;
+                self.closed = true;
                 Ok(())
             },
             _ = self.exit.changed() => {
@@ -530,25 +558,28 @@ where
                 verbose,
                 binary,
                 allow_out_of_order,
+                ignore_invalid_price_ids,
             }) => {
                 let price_ids: Vec<PriceIdentifier> = ids.into_iter().map(|id| id.into()).collect();
                 let available_price_ids = Aggregates::get_price_feed_ids(&*self.state).await;
 
-                let not_found_price_ids: Vec<&PriceIdentifier> = price_ids
+                let (found_price_ids, not_found_price_ids): (
+                    Vec<&PriceIdentifier>,
+                    Vec<&PriceIdentifier>,
+                ) = price_ids
                     .iter()
-                    .filter(|price_id| !available_price_ids.contains(price_id))
-                    .collect();
+                    .partition(|price_id| available_price_ids.contains(price_id));
 
                 // If there is a single price id that is not found, we don't subscribe to any of the
-                // asked correct price feed ids and return an error to be more explicit and clear.
-                if !not_found_price_ids.is_empty() {
+                // asked correct price feed ids and return an error to be more explicit and clear,
+                // unless the client explicitly asked to ignore invalid ids
+                if !not_found_price_ids.is_empty() && !ignore_invalid_price_ids {
                     self.sender
                         .send(
                             serde_json::to_string(&ServerMessage::Response(
                                 ServerResponseMessage::Err {
                                     error: format!(
-                                        "Price feed(s) with id(s) {:?} not found",
-                                        not_found_price_ids
+                                        "Price feed(s) with id(s) {not_found_price_ids:?} not found",
                                     ),
                                 },
                             ))?
@@ -557,9 +588,9 @@ where
                         .await?;
                     return Ok(());
                 } else {
-                    for price_id in price_ids {
+                    for price_id in found_price_ids {
                         self.price_feeds_with_config.insert(
-                            price_id,
+                            *price_id,
                             PriceFeedClientConfig {
                                 verbose,
                                 binary,

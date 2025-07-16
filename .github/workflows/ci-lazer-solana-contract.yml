@@ -6,6 +6,7 @@ on:
   pull_request:
     paths:
       - lazer/**
+      - .github/workflows/ci-lazer-solana-contract.yml
 
 jobs:
   lazer-solana-contract-test:
@@ -18,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: 1.81.0
+          cache-workspaces: "lazer/contracts/solana -> target"
       - name: install taplo
         run: cargo install --locked taplo-cli@0.9.3
       - uses: actions/setup-node@v4
@@ -28,7 +29,7 @@ jobs:
       # install will fail if this isn't in the build environment and if a
       # precompiled binary isn't found.
       - name: Install libusb
-        run: sudo apt install -y libusb-1.0-0-dev libudev-dev
+        run: sudo apt-get update && sudo apt-get install -y libusb-1.0-0-dev libudev-dev
       - uses: pnpm/action-setup@v4
         name: Install pnpm
         with:
@@ -42,6 +43,21 @@ jobs:
       - name: Create Solana key
         run: solana-keygen new --no-bip39-passphrase
       - name: Install Anchor
-        run: RUSTFLAGS= cargo install --git https://github.com/coral-xyz/anchor --tag v0.30.1 anchor-cli
+        run: |
+          rustup install 1.79.0
+          # anchor requires nightly for ABI generation and it's broken for more recent nightly versions
+          rustup install nightly-2025-04-15
+          # This anchor version doesn't build with newer Rust
+          RUSTFLAGS= cargo +1.79.0 install --git https://github.com/coral-xyz/anchor --tag v0.30.1 --locked anchor-cli
       - name: Run anchor tests
         run: pnpm run test:anchor
+      - name: check Cargo.toml formatting
+        run: find . -name Cargo.toml -exec taplo fmt --check --diff {} \;
+      - name: Format check
+        run: cargo fmt --all -- --check
+      - name: Clippy check
+        run: cargo clippy --all-targets -- --deny warnings
+      - name: Build contract
+        run: cargo build-sbf
+      - name: test
+        run: cargo test

@@ -40,15 +40,43 @@ async function main() {
 
   // Print storage info
   console.log("Storage Account Info:");
-  console.log("--------------------");
+  console.log("---------------------");
   console.log("Top Authority:", storage.topAuthority.toBase58());
   console.log("Treasury:", storage.treasury.toBase58());
-  console.log("\nTrusted Signers:");
-  console.log("----------------");
+  console.log("\nTrusted Ed25519 Signers:");
+  console.log("------------------------");
 
-  for (const signer of storage.trustedSigners) {
-    if (signer.pubkey.equals(anchor.web3.PublicKey.default)) continue;
-    console.log(`\nPublic Key: ${signer.pubkey.toBase58()}`);
+  const trustedSigners = storage.trustedSigners.slice(
+    0,
+    storage.numTrustedSigners,
+  );
+  for (const signer of trustedSigners) {
+    console.log(
+      `\nPublic Key: ${(signer.pubkey as anchor.web3.PublicKey).toBase58()}`,
+    );
+    console.log(
+      `Expires At: ${new Date(
+        signer.expiresAt.toNumber() * 1000,
+      ).toISOString()}`,
+    );
+    console.log(
+      `Active: ${
+        signer.expiresAt.toNumber() > Date.now() / 1000 ? "Yes" : "No"
+      }`,
+    );
+  }
+
+  console.log("\nTrusted ECDSA Signers:");
+  console.log("----------------------");
+
+  const trustedEcdsaSigners = storage.trustedEcdsaSigners.slice(
+    0,
+    storage.numTrustedEcdsaSigners,
+  );
+  for (const signer of trustedEcdsaSigners) {
+    console.log(
+      `\nPublic Address: ${Buffer.from(signer.pubkey as number[]).toString("hex")}`,
+    );
     console.log(
       `Expires At: ${new Date(
         signer.expiresAt.toNumber() * 1000,

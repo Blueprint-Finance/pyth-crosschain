@@ -1,7 +1,7 @@
 "use client";
 
-import { useLogger } from "@pythnetwork/app-logger";
-import { useResizeObserver } from "@react-hookz/web";
+import { useLogger } from "@pythnetwork/component-library/useLogger";
+import { useResizeObserver, useMountEffect } from "@react-hookz/web";
 import type { IChartApi, ISeriesApi, UTCTimestamp } from "lightweight-charts";
 import { LineSeries, LineStyle, createChart } from "lightweight-charts";
 import { useTheme } from "next-themes";
@@ -9,8 +9,9 @@ import type { RefObject } from "react";
 import { useEffect, useRef, useCallback } from "react";
 import { z } from "zod";
 
-import theme from "./theme.module.scss";
+import styles from "./chart.module.scss";
 import { useLivePriceData } from "../../hooks/use-live-price-data";
+import { usePriceFormatter } from "../../hooks/use-price-formatter";
 import { Cluster } from "../../services/pyth";
 
 type Props = {
@@ -22,14 +23,18 @@ export const Chart = ({ symbol, feedId }: Props) => {
   const chartContainerRef = useChart(symbol, feedId);
 
   return (
-    <div style={{ width: "100%", height: "100%" }} ref={chartContainerRef} />
+    <div
+      style={{ width: "100%", height: "100%" }}
+      className={styles.chart}
+      ref={chartContainerRef}
+    />
   );
 };
 
 const useChart = (symbol: string, feedId: string) => {
   const { chartContainerRef, chartRef } = useChartElem(symbol, feedId);
   useChartResize(chartContainerRef, chartRef);
-  useChartColors(chartRef);
+  useChartColors(chartContainerRef, chartRef);
   return chartContainerRef;
 };
 
@@ -40,6 +45,7 @@ const useChartElem = (symbol: string, feedId: string) => {
   const chartRef = useRef<ChartRefContents | undefined>(undefined);
   const earliestDateRef = useRef<bigint | undefined>(undefined);
   const isBackfilling = useRef(false);
+  const priceFormatter = usePriceFormatter();
 
   const backfillData = useCallback(() => {
     if (!isBackfilling.current && earliestDateRef.current) {
@@ -95,10 +101,10 @@ const useChartElem = (symbol: string, feedId: string) => {
     }
   }, [logger, symbol]);
 
-  useEffect(() => {
+  useMountEffect(() => {
     const chartElem = chartContainerRef.current;
     if (chartElem === null) {
-      return;
+      throw new Error("Chart element was null on mount");
     } else {
       const chart = createChart(chartElem, {
         layout: {
@@ -108,6 +114,9 @@ const useChartElem = (symbol: string, feedId: string) => {
         timeScale: {
           timeVisible: true,
           secondsVisible: true,
+        },
+        localization: {
+          priceFormatter: priceFormatter.format,
         },
       });
 
@@ -137,13 +146,11 @@ const useChartElem = (symbol: string, feedId: string) => {
         chart.remove();
       };
     }
-  }, [backfillData]);
+  });
 
   useEffect(() => {
     if (current && chartRef.current) {
-      if (!earliestDateRef.current) {
-        earliestDateRef.current = current.timestamp;
-      }
+      earliestDateRef.current ??= current.timestamp;
       const { price, confidence } = current.aggregate;
       const time = getLocalTimestamp(
         new Date(Number(current.timestamp * 1000n)),
@@ -219,17 +226,24 @@ const useChartResize = (
   });
 };
 
-const useChartColors = (chartRef: RefObject<ChartRefContents | undefined>) => {
+const useChartColors = (
+  chartContainerRef: RefObject<HTMLDivElement | null>,
+  chartRef: RefObject<ChartRefContents | undefined>,
+) => {
   const { resolvedTheme } = useTheme();
   useEffect(() => {
-    if (chartRef.current && resolvedTheme) {
-      applyColors(chartRef.current, resolvedTheme);
+    if (chartRef.current && chartContainerRef.current && resolvedTheme) {
+      applyColors(chartRef.current, chartContainerRef.current, resolvedTheme);
     }
-  }, [resolvedTheme, chartRef]);
+  }, [resolvedTheme, chartRef, chartContainerRef]);
 };
 
-const applyColors = ({ chart, ...series }: ChartRefContents, theme: string) => {
-  const colors = getColors(theme);
+const applyColors = (
+  { chart, ...series }: ChartRefContents,
+  container: HTMLDivElement,
+  theme: string,
+) => {
+  const colors = getColors(container, theme);
   chart.applyOptions({
     grid: {
       horzLines: {
@@ -262,12 +276,20 @@ const applyColors = ({ chart, ...series }: ChartRefContents, theme: string) => {
   }
 };
 
-const getColors = (resolvedTheme: string) => ({
-  border: theme[`border-${resolvedTheme}`] ?? "red",
-  muted: theme[`muted-${resolvedTheme}`] ?? "",
-  chartNeutral: theme[`chart-series-neutral-${resolvedTheme}`] ?? "",
-  chartPrimary: theme[`chart-series-primary-${resolvedTheme}`] ?? "",
-});
+const getColors = (container: HTMLDivElement, resolvedTheme: string) => {
+  const style = getComputedStyle(container);
+
+  return {
+    border: style.getPropertyValue(`--border-${resolvedTheme}`),
+    muted: style.getPropertyValue(`--muted-${resolvedTheme}`),
+    chartNeutral: style.getPropertyValue(
+      `--chart-series-neutral-${resolvedTheme}`,
+    ),
+    chartPrimary: style.getPropertyValue(
+      `--chart-series-primary-${resolvedTheme}`,
+    ),
+  };
+};
 
 const getLocalTimestamp = (date: Date): UTCTimestamp =>
   (Date.UTC(

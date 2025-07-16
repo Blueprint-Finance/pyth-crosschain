@@ -7,7 +7,7 @@
     "node": "22"
   },
   "scripts": {
-    "build": "next build",
+    "build:vercel": "next build",
     "fix:format": "prettier --write .",
     "fix:lint": "eslint --fix . --max-warnings 0",
     "pull:env": "[ $CI ] || VERCEL_ORG_ID=team_BKQrg3JJFLxZyTqpuYtIY0rj VERCEL_PROJECT_ID=prj_3TIYzlYYncZx7wRtfmzG2YUsNzKp vercel env pull",
@@ -22,6 +22,7 @@
     "@amplitude/analytics-browser": "catalog:",
     "@amplitude/plugin-autocapture-browser": "catalog:",
     "@bonfida/spl-name-service": "catalog:",
+    "@coral-xyz/anchor": "catalog:",
     "@heroicons/react": "catalog:",
     "@next/third-parties": "catalog:",
     "@pythnetwork/hermes-client": "workspace:*",

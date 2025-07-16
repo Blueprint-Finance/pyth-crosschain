@@ -91,7 +91,7 @@ export const Publishers = async () => {
               target="_blank"
               size="sm"
               variant="outline"
-              afterIcon={ArrowSquareOut}
+              afterIcon={<ArrowSquareOut />}
             >
               Staking App
             </Button>
@@ -147,7 +147,7 @@ export const Publishers = async () => {
 const toTableRow = ({
   key,
   rank,
-  inactiveFeeds,
+  permissionedFeeds,
   activeFeeds,
   averageScore,
 }: Awaited<ReturnType<typeof getPublishers>>[number]) => {
@@ -155,8 +155,8 @@ const toTableRow = ({
   return {
     id: key,
     ranking: rank,
-    activeFeeds: activeFeeds,
-    inactiveFeeds: inactiveFeeds,
+    permissionedFeeds,
+    activeFeeds,
     averageScore,
     ...(knownPublisher && {
       name: knownPublisher.name,

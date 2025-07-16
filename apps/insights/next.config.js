@@ -1,4 +1,9 @@
 const config = {
+  experimental: {
+    useCache: true,
+    reactCompiler: true,
+  },
+
   reactStrictMode: true,
 
   pageExtensions: ["ts", "tsx", "mdx"],
@@ -9,20 +14,23 @@ const config = {
     },
   },
 
+  turbopack: {
+    rules: {
+      "*.svg": {
+        loaders: ["@svgr/webpack"],
+        as: "*.js",
+      },
+    },
+  },
+
   webpack(config) {
     config.module.rules.push({
       test: /\.svg$/i,
       use: ["@svgr/webpack"],
     });
 
-    config.resolve.extensionAlias = {
-      ".js": [".js", ".ts", ".tsx"],
-    };
-
     return config;
   },
-
-  transpilePackages: ["@pythnetwork/*"],
 
   headers: async () => [
     {

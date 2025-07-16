@@ -1,5 +1,5 @@
 use {
-    crate::api::ChainId,
+    crate::{api::ChainId, config::LATENCY_BUCKETS},
     anyhow::Result,
     axum::async_trait,
     ethers::{
@@ -11,8 +11,10 @@ use {
         metrics::{counter::Counter, family::Family, histogram::Histogram},
         registry::Registry,
     },
-    std::{str::FromStr, sync::Arc},
+    reqwest::Client,
+    std::{sync::Arc, time::Duration},
     tokio::{sync::RwLock, time::Instant},
+    url::Url,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, EncodeLabelSet)]
@@ -40,12 +42,7 @@ impl RpcMetrics {
         );
 
         let latency = Family::<RpcLabel, Histogram>::new_with_constructor(|| {
-            Histogram::new(
-                [
-                    0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0,
-                ]
-                .into_iter(),
-            )
+            Histogram::new(LATENCY_BUCKETS.into_iter())
         });
         sub_registry.register(
             "latency",
@@ -114,8 +111,13 @@ impl TracedClient {
         url: &str,
         metrics: Arc<RpcMetrics>,
     ) -> Result<Provider<TracedClient>> {
+        let url: Url = url.try_into()?;
+        let client = Client::builder()
+            .timeout(Duration::from_secs(10))
+            .build()
+            .expect("Failed to create HTTP client");
         Ok(Provider::new(TracedClient {
-            inner: Http::from_str(url)?,
+            inner: Http::new_with_client(url, client),
             chain_id,
             metrics,
         }))

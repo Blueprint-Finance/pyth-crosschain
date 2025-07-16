@@ -2,6 +2,7 @@ use clap::{crate_authors, crate_description, crate_name, crate_version, Args, Pa
 
 mod aggregate;
 mod benchmarks;
+mod cache;
 mod metrics;
 mod pythnet;
 mod rpc;
@@ -13,7 +14,10 @@ mod wormhole;
 #[command(author = crate_authors!())]
 #[command(about = crate_description!())]
 #[command(version = crate_version!())]
-#[allow(clippy::large_enum_variant)]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "performance is not a concern for config"
+)]
 pub enum Options {
     /// Run the Hermes Price Service.
     Run(RunOptions),
@@ -24,6 +28,10 @@ pub enum Options {
 
 #[derive(Args, Clone, Debug)]
 pub struct RunOptions {
+    /// Cache Options
+    #[command(flatten)]
+    pub cache: cache::Options,
+
     /// Aggregate Options
     #[command(flatten)]
     pub aggregate: aggregate::Options,

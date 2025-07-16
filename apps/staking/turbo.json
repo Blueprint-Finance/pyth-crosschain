@@ -2,7 +2,7 @@
   "$schema": "https://turbo.build/schema.json",
   "extends": ["//"],
   "tasks": {
-    "build": {
+    "build:vercel": {
       "env": [
         "IP_ALLOWLIST",
         "GOVERNANCE_ONLY_REGIONS",
@@ -13,14 +13,6 @@
         "BLOCKED_REGIONS",
         "AMPLITUDE_API_KEY",
         "GOOGLE_ANALYTICS_ID"
-      ]
-    },
-    "start:dev": {
-      "dependsOn": [
-        "//#install:modules",
-        "pull:env",
-        "@pythnetwork/hermes-client#build",
-        "@pythnetwork/solana-utils#build"
       ]
     }
   }

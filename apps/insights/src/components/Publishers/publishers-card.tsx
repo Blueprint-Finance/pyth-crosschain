@@ -2,10 +2,11 @@
 
 import { Broadcast } from "@phosphor-icons/react/dist/ssr/Broadcast";
 import { Database } from "@phosphor-icons/react/dist/ssr/Database";
-import { useLogger } from "@pythnetwork/app-logger";
 import { Badge } from "@pythnetwork/component-library/Badge";
 import { Card } from "@pythnetwork/component-library/Card";
+import { EntityList } from "@pythnetwork/component-library/EntityList";
 import { Link } from "@pythnetwork/component-library/Link";
+import { NoResults } from "@pythnetwork/component-library/NoResults";
 import { Paginator } from "@pythnetwork/component-library/Paginator";
 import { SearchInput } from "@pythnetwork/component-library/SearchInput";
 import { Select } from "@pythnetwork/component-library/Select";
@@ -14,6 +15,7 @@ import type {
   SortDescriptor,
 } from "@pythnetwork/component-library/Table";
 import { Table } from "@pythnetwork/component-library/Table";
+import { useLogger } from "@pythnetwork/component-library/useLogger";
 import clsx from "clsx";
 import { useQueryState, parseAsStringEnum } from "nuqs";
 import type { ReactNode } from "react";
@@ -23,12 +25,13 @@ import { useFilter, useCollator } from "react-aria";
 import styles from "./publishers-card.module.scss";
 import { useQueryParamFilterPagination } from "../../hooks/use-query-param-filter-pagination";
 import { CLUSTER_NAMES } from "../../services/pyth";
-import { EntityList } from "../EntityList";
-import { ExplainActive, ExplainInactive } from "../Explanations";
-import { NoResults } from "../NoResults";
+import {
+  ExplainPermissioned,
+  ExplainActive,
+  ExplainRanking,
+} from "../Explanations";
 import { PublisherTag } from "../PublisherTag";
 import { Ranking } from "../Ranking";
-import rootStyles from "../Root/index.module.scss";
 import { Score } from "../Score";
 
 const PUBLISHER_SCORE_WIDTH = 38;
@@ -43,8 +46,8 @@ type Props = {
 type Publisher = {
   id: string;
   ranking: number;
+  permissionedFeeds: number;
   activeFeeds: number;
-  inactiveFeeds: number;
   averageScore: number;
 } & (
   | { name: string; icon: ReactNode }
@@ -99,8 +102,8 @@ const ResolvedPublishersCard = ({
     (a, b, { column, direction }) => {
       switch (column) {
         case "ranking":
+        case "permissionedFeeds":
         case "activeFeeds":
-        case "inactiveFeeds":
         case "averageScore": {
           return (
             (direction === "descending" ? -1 : 1) * (a[column] - b[column])
@@ -131,13 +134,14 @@ const ResolvedPublishersCard = ({
           id,
           ranking,
           averageScore,
+          permissionedFeeds,
           activeFeeds,
-          inactiveFeeds,
           ...publisher
         }) => ({
           id,
           href: `/publishers/${cluster}/${id}`,
           textValue: publisher.name ?? id,
+          prefetch: false,
           data: {
             ranking: <Ranking>{ranking}</Ranking>,
             name: (
@@ -149,20 +153,14 @@ const ResolvedPublishersCard = ({
                 })}
               />
             ),
+            permissionedFeeds,
             activeFeeds: (
               <Link
                 href={`/publishers/${cluster}/${id}/price-feeds?status=Active`}
                 invert
+                prefetch={false}
               >
                 {activeFeeds}
-              </Link>
-            ),
-            inactiveFeeds: (
-              <Link
-                href={`/publishers/${cluster}/${id}/price-feeds?status=Inactive`}
-                invert
-              >
-                {inactiveFeeds}
               </Link>
             ),
             averageScore: (
@@ -224,7 +222,11 @@ type PublishersCardContentsProps = Pick<Props, "className" | "explainAverage"> &
         cluster: (typeof CLUSTER_NAMES)[number];
         onChangeCluster: (value: (typeof CLUSTER_NAMES)[number]) => void;
         rows: (RowConfig<
-          "ranking" | "name" | "activeFeeds" | "inactiveFeeds" | "averageScore"
+          | "ranking"
+          | "name"
+          | "permissionedFeeds"
+          | "activeFeeds"
+          | "averageScore"
         > & { textValue: string })[];
       }
   );
@@ -267,8 +269,8 @@ const PublishersCardContents = ({
           size="sm"
           variant="outline"
           hideLabel
-          options={CLUSTER_NAMES}
-          icon={Database}
+          options={CLUSTER_NAMES.map((id) => ({ id }))}
+          icon={<Database />}
           {...(props.isLoading
             ? { isPending: true, buttonLabel: "Cluster" }
             : {
@@ -299,8 +301,8 @@ const PublishersCardContents = ({
       headerLoadingSkeleton={<PublisherTag isLoading />}
       fields={[
         { id: "averageScore", name: "Average Score" },
+        { id: "permissionedFeeds", name: "Permissioned Feeds" },
         { id: "activeFeeds", name: "Active Feeds" },
-        { id: "inactiveFeeds", name: "Inactive Feeds" },
       ]}
       isLoading={props.isLoading}
       rows={
@@ -321,12 +323,17 @@ const PublishersCardContents = ({
       rounded
       fill
       label="Publishers"
-      stickyHeader={rootStyles.headerHeight}
+      stickyHeader="appHeader"
       className={styles.table ?? ""}
       columns={[
         {
           id: "ranking",
-          name: "RANKING",
+          name: (
+            <>
+              RANKING
+              <ExplainRanking />
+            </>
+          ),
           width: 25,
           loadingSkeleton: <Ranking isLoading />,
           allowsSorting: true,
@@ -340,11 +347,11 @@ const PublishersCardContents = ({
           allowsSorting: true,
         },
         {
-          id: "activeFeeds",
+          id: "permissionedFeeds",
           name: (
             <>
-              ACTIVE FEEDS
-              <ExplainActive />
+              PERMISSIONED
+              <ExplainPermissioned />
             </>
           ),
           alignment: "center",
@@ -352,15 +359,15 @@ const PublishersCardContents = ({
           allowsSorting: true,
         },
         {
-          id: "inactiveFeeds",
+          id: "activeFeeds",
           name: (
             <>
-              INACTIVE FEEDS
-              <ExplainInactive />
+              ACTIVE
+              <ExplainActive />
             </>
           ),
           alignment: "center",
-          width: 30,
+          width: 24,
           allowsSorting: true,
         },
         {

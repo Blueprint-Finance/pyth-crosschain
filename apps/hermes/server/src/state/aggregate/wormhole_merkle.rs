@@ -55,14 +55,16 @@ pub async fn store_wormhole_merkle_verified_message<S>(
     state: &S,
     root: WormholeMerkleRoot,
     vaa: VaaBytes,
-) -> Result<()>
+) -> Result<bool>
 where
     S: Cache,
 {
+    // Store the state and check if it was already stored in a single operation
+    // This avoids the race condition where multiple threads could check and find nothing
+    // but then both store the same state
     state
         .store_wormhole_merkle_state(WormholeMerkleState { root, vaa })
-        .await?;
-    Ok(())
+        .await
 }
 
 pub fn construct_message_states_proofs(
@@ -140,6 +142,13 @@ pub fn construct_update_data(mut messages: Vec<RawMessageWithMerkleProof>) -> Re
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::cast_possible_wrap,
+    clippy::panic,
+    clippy::indexing_slicing,
+    reason = "tests"
+)]
 mod test {
     use {
         super::*,
@@ -173,6 +182,7 @@ mod test {
     }
 
     #[test]
+
     fn test_construct_update_data_works_on_mixed_slot_and_big_size() {
         let mut messages = vec![];
 

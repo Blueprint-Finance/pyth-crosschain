@@ -1,7 +1,18 @@
-import * as Icon from "@phosphor-icons/react/dist/ssr";
+import * as icons from "@phosphor-icons/react/dist/ssr";
 import type { Meta, StoryObj } from "@storybook/react";
 
-import { Button as ButtonComponent, VARIANTS, SIZES } from "./index.js";
+import { Button as ButtonComponent, VARIANTS, SIZES } from "./index.jsx";
+
+const iconControl = {
+  control: "select",
+  options: Object.keys(icons),
+  mapping: Object.fromEntries(
+    Object.entries(icons).map(([iconName, Icon]) => [
+      iconName,
+      <Icon key={iconName} weights={new Map()} />,
+    ]),
+  ),
+} as const;
 
 const meta = {
   component: ButtonComponent,
@@ -45,24 +56,15 @@ const meta = {
       },
     },
     beforeIcon: {
-      control: "select",
-      options: Object.keys(Icon),
-      mapping: Icon,
+      ...iconControl,
       table: {
         category: "Contents",
       },
     },
     afterIcon: {
-      control: "select",
-      options: Object.keys(Icon),
-      mapping: Icon,
+      ...iconControl,
       table: {
         category: "Contents",
-      },
-    },
-    onPress: {
-      table: {
-        category: "Behavior",
       },
     },
     isPending: {
@@ -96,5 +98,44 @@ export const Button = {
     isPending: false,
     rounded: false,
     hideText: false,
+  },
+  argTypes: {
+    onPress: {
+      table: {
+        category: "Behavior",
+      },
+    },
+  },
+} satisfies StoryObj<typeof ButtonComponent>;
+
+export const DrawerButton = {
+  args: {
+    children: "Open Drawer",
+    variant: "primary",
+    size: "md",
+    isDisabled: false,
+    isPending: false,
+    rounded: false,
+    hideText: false,
+    drawer: {
+      title: "Hello world",
+      contents: "This is a drawer",
+    },
+  },
+} satisfies StoryObj<typeof ButtonComponent>;
+
+export const AlertButton = {
+  args: {
+    children: "Open Alert",
+    variant: "primary",
+    size: "md",
+    isDisabled: false,
+    isPending: false,
+    rounded: false,
+    hideText: false,
+    alert: {
+      title: "Alert!",
+      contents: "This is an alert",
+    },
   },
 } satisfies StoryObj<typeof ButtonComponent>;

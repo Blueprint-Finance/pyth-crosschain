@@ -7,7 +7,7 @@
     "node": "22"
   },
   "scripts": {
-    "build": "next build",
+    "build:vercel": "next build",
     "fix:format": "prettier --write .",
     "fix:lint:eslint": "eslint --fix .",
     "fix:lint:stylelint": "stylelint --fix 'src/**/*.scss'",
@@ -22,13 +22,10 @@
   "dependencies": {
     "@clickhouse/client": "catalog:",
     "@phosphor-icons/react": "catalog:",
-    "@pythnetwork/app-logger": "workspace:*",
     "@pythnetwork/client": "catalog:",
     "@pythnetwork/component-library": "workspace:*",
-    "@pythnetwork/fonts": "workspace:*",
     "@pythnetwork/hermes-client": "workspace:*",
     "@pythnetwork/known-publishers": "workspace:*",
-    "@pythnetwork/next-root": "workspace:*",
     "@react-hookz/web": "catalog:",
     "@solana/web3.js": "catalog:",
     "bs58": "catalog:",
@@ -61,6 +58,7 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "autoprefixer": "catalog:",
+    "babel-plugin-react-compiler": "catalog:",
     "eslint": "catalog:",
     "jest": "catalog:",
     "postcss": "catalog:",

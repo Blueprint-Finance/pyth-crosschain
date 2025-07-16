@@ -1,6 +1,6 @@
 {
   "name": "@pythnetwork/pyth-lazer-sdk",
-  "version": "0.4.0",
+  "version": "2.0.0",
   "description": "Pyth Lazer SDK",
   "publishConfig": {
     "access": "public"
@@ -29,8 +29,7 @@
     "test:format": "prettier --check .",
     "fix:format": "prettier --write .",
     "example": "node --loader ts-node/esm examples/index.js",
-    "doc": "typedoc --out docs/typedoc src",
-    "publish": "pnpm run script -- publish"
+    "doc": "typedoc --out docs/typedoc src"
   },
   "devDependencies": {
     "@cprussin/eslint-config": "catalog:",
@@ -39,12 +38,12 @@
     "@types/ws": "^8.5.12",
     "eslint": "catalog:",
     "prettier": "catalog:",
-    "ts-node": "^10.9.2",
+    "ts-node": "catalog:",
     "typedoc": "^0.26.8",
     "typescript": "catalog:"
   },
   "bugs": {
-    "url": "https://github.com/pyth-lazer-sdk/pyth-lazer-sdk/issues"
+    "url": "https://github.com/pyth-network/pyth-crosschain/issues"
   },
   "type": "module",
   "homepage": "https://github.com/pyth-network/pyth-crosschain/tree/main/lazer/sdk/js",
@@ -60,8 +59,6 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@isaacs/ttlcache": "^1.4.1",
-    "@solana/buffer-layout": "^4.0.1",
-    "@solana/web3.js": "^1.98.0",
     "isomorphic-ws": "^5.0.0",
     "ts-log": "^2.2.7",
     "ws": "^8.18.0"

@@ -108,6 +108,11 @@ export const RECEIVER_CHAINS = {
   story: 60078,
   hyperevm: 60079,
   bittensor_mainnet: 60080,
+  xion: 60081,
+  worldchain: 60082,
+  swellchain: 60083,
+  mezo: 60084,
+  iota_sui_mainnet: 60085,
 
   // Testnets as a separate chain ids (to use stable data sources and governance for them)
   injective_testnet: 60013,
@@ -225,7 +230,7 @@ export const RECEIVER_CHAINS = {
   happy_bird_song_ends_with_tio: 50108,
   hyperevm_testnet: 50109,
   eventum_testnet: 50110,
-  fantom_sonic_devnet: 50111,
+  sonic_blaze_testnet: 50111,
   movement_bardock_testnet: 50112,
   story_testnet: 50113,
   coredao_testnet_v2: 50114,
@@ -234,6 +239,14 @@ export const RECEIVER_CHAINS = {
   monad_testnet: 50117,
   iota_sui_testnet: 50118,
   berachain_bepolia: 50119,
+  megaeth_testnet: 50120,
+  converge_testnet: 50121,
+  swellchain_testnet: 50122,
+  worldchain_testnet: 50123,
+  mezo_testnet: 50124,
+  hemi_testnet: 50125,
+  injective_evm_testnet: 50126,
+  ethereal_testnet: 50127,
 };
 
 // If there is any overlapping value the receiver chain will replace the wormhole

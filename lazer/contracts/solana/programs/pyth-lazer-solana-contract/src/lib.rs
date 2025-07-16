@@ -1,3 +1,5 @@
+#![allow(unexpected_cfgs)] // anchor macro triggers it
+
 mod signature;
 
 use {
@@ -261,6 +263,7 @@ pub struct VerifyMessage<'info> {
     )]
     pub storage: Account<'info, Storage>,
     /// CHECK: this account doesn't need additional constraints.
+    #[account(mut)]
     pub treasury: AccountInfo<'info>,
     pub system_program: Program<'info, System>,
     /// CHECK: account ID is checked in Solana SDK during calls
@@ -280,6 +283,7 @@ pub struct VerifyEcdsaMessage<'info> {
     )]
     pub storage: Account<'info, Storage>,
     /// CHECK: this account doesn't need additional constraints.
+    #[account(mut)]
     pub treasury: AccountInfo<'info>,
     pub system_program: Program<'info, System>,
 }

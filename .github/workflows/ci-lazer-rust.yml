@@ -20,17 +20,15 @@ jobs:
         with:
           submodules: recursive
       - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
         with:
-          toolchain: 1.81.0
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "lazer -> target"
+          version: "30.2"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
-      - name: install extra tools
-        run: |
-          cargo install --locked taplo-cli@0.9.3
-          sudo apt-get install -y protobuf-compiler
+      - name: install taplo
+        run: cargo install --locked taplo-cli@0.9.3
       - name: Install Solana Cli
         run: |
           sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
@@ -41,11 +39,14 @@ jobs:
         run: cargo fmt --all -- --check
         if: success() || failure()
       - name: Clippy check
-        run: cargo clippy --all-targets -- --deny warnings
+        run: cargo clippy -p pyth-lazer-protocol -p pyth-lazer-client -p pyth-lazer-publisher-sdk --all-targets -- --deny warnings
         if: success() || failure()
-      - name: Build Solana programs
-        run: cargo build-sbf
+      - name: Clippy check with mry
+        run: cargo clippy -F mry -p pyth-lazer-protocol --all-targets -- --deny warnings
         if: success() || failure()
       - name: test
-        run: cargo test
+        run: cargo test -p pyth-lazer-protocol -p pyth-lazer-client -p pyth-lazer-publisher-sdk
+        if: success() || failure()
+      - name: test with mry
+        run: cargo test -F mry -p pyth-lazer-protocol
         if: success() || failure()

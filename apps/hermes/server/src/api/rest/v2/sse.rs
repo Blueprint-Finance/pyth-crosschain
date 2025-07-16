@@ -19,11 +19,14 @@ use {
     pyth_sdk::PriceIdentifier,
     serde::Deserialize,
     serde_qs::axum::QsQuery,
-    std::convert::Infallible,
-    tokio::sync::broadcast,
+    std::{convert::Infallible, time::Duration},
+    tokio::{sync::broadcast, time::Instant},
     tokio_stream::{wrappers::BroadcastStream, StreamExt as _},
     utoipa::IntoParams,
 };
+
+// Constants
+const MAX_CONNECTION_DURATION: Duration = Duration::from_secs(24 * 60 * 60); // 24 hours
 
 #[derive(Debug, Deserialize, IntoParams)]
 #[into_params(parameter_in = Query)]
@@ -75,6 +78,9 @@ fn default_true() -> bool {
     params(StreamPriceUpdatesQueryParams)
 )]
 /// SSE route handler for streaming price updates.
+///
+/// The connection will automatically close after 24 hours to prevent resource leaks.
+/// Clients should implement reconnection logic to maintain continuous price updates.
 pub async fn price_stream_sse_handler<S>(
     State(state): State<ApiState<S>>,
     QsQuery(params): QsQuery<StreamPriceUpdatesQueryParams>,
@@ -93,34 +99,45 @@ where
     // Convert the broadcast receiver into a Stream
     let stream = BroadcastStream::new(update_rx);
 
-    let sse_stream = stream.then(move |message| {
-        let state_clone = state.clone(); // Clone again to use inside the async block
-        let price_ids_clone = price_ids.clone(); // Clone again for use inside the async block
-        async move {
-            match message {
-                Ok(event) => {
-                    match handle_aggregation_event(
-                        event,
-                        state_clone,
-                        price_ids_clone,
-                        params.encoding,
-                        params.parsed,
-                        params.benchmarks_only,
-                        params.allow_unordered,
-                    )
-                    .await
-                    {
-                        Ok(Some(update)) => Ok(Event::default()
-                            .json_data(update)
-                            .unwrap_or_else(error_event)),
-                        Ok(None) => Ok(Event::default().comment("No update available")),
-                        Err(e) => Ok(error_event(e)),
+    // Set connection start time
+    let start_time = Instant::now();
+
+    let sse_stream = stream
+        .take_while(move |_| start_time.elapsed() < MAX_CONNECTION_DURATION)
+        .then(move |message| {
+            let state_clone = state.clone(); // Clone again to use inside the async block
+            let price_ids_clone = price_ids.clone(); // Clone again for use inside the async block
+            async move {
+                match message {
+                    Ok(event) => {
+                        match handle_aggregation_event(
+                            event,
+                            state_clone,
+                            price_ids_clone,
+                            params.encoding,
+                            params.parsed,
+                            params.benchmarks_only,
+                            params.allow_unordered,
+                        )
+                        .await
+                        {
+                            Ok(Some(update)) => Some(Ok(Event::default()
+                                .json_data(update)
+                                .unwrap_or_else(error_event))),
+                            Ok(None) => None,
+                            Err(e) => Some(Ok(error_event(e))),
+                        }
                     }
+                    Err(e) => Some(Ok(error_event(e))),
                 }
-                Err(e) => Ok(error_event(e)),
             }
-        }
-    });
+        })
+        .filter_map(|x| x)
+        .chain(futures::stream::once(async {
+            Ok(Event::default()
+                .event("error")
+                .data("Connection timeout reached (24h)"))
+        }));
 
     Ok(Sse::new(sse_stream).keep_alive(KeepAlive::default()))
 }
@@ -168,9 +185,7 @@ where
             price_feed
                 .metadata
                 .prev_publish_time
-                .map_or(false, |prev_time| {
-                    prev_time != price_feed.price.publish_time
-                })
+                .is_some_and(|prev_time| prev_time != price_feed.price.publish_time)
         });
         // Retain price id in price_ids that are in parsed_price_updates
         price_ids.retain(|price_id| {
@@ -214,5 +229,5 @@ where
 fn error_event<E: std::fmt::Debug>(e: E) -> Event {
     Event::default()
         .event("error")
-        .data(format!("Error receiving update: {:?}", e))
+        .data(format!("Error receiving update: {e:?}"))
 }

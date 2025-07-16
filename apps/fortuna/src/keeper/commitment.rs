@@ -38,18 +38,27 @@ pub async fn update_commitments_if_necessary(
     let latest_safe_block = get_latest_safe_block(chain_state).in_current_span().await;
     let provider_address = chain_state.provider_address;
     let provider_info = contract
-        .get_provider_info(provider_address)
+        .get_provider_info_v2(provider_address)
         .block(latest_safe_block) // To ensure we are not revealing sooner than we should
         .call()
         .await
-        .map_err(|e| anyhow!("Error while getting provider info. error: {:?}", e))?;
+        .map_err(|e| {
+            anyhow!(
+                "Error while getting provider info at block {}. error: {:?}",
+                latest_safe_block,
+                e
+            )
+        })?;
     if provider_info.max_num_hashes == 0 {
         return Ok(());
     }
     let threshold =
         ((provider_info.max_num_hashes as f64) * UPDATE_COMMITMENTS_THRESHOLD_FACTOR) as u64;
-    if provider_info.sequence_number - provider_info.current_commitment_sequence_number > threshold
-    {
+    let outstanding_requests =
+        provider_info.sequence_number - provider_info.current_commitment_sequence_number;
+    if outstanding_requests > threshold {
+        // NOTE: This log message triggers a grafana alert. If you want to change the text, please change the alert also.
+        tracing::warn!("Update commitments threshold reached -- possible outage or DDOS attack. Number of outstanding requests: {:?} Threshold: {:?}", outstanding_requests, threshold);
         let seq_number = provider_info.sequence_number - 1;
         let provider_revelation = chain_state
             .state

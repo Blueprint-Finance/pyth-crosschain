@@ -3,14 +3,15 @@
 //! eliminating WebSocket overhead.
 
 use {
-    super::router::{Price, PriceFeedId, Rate, TimestampUs},
+    super::router::{Price, PriceFeedId, Rate},
+    crate::time::TimestampUs,
     derive_more::derive::From,
     serde::{Deserialize, Serialize},
 };
 
 /// Represents a binary (bincode-serialized) stream update sent
 /// from the publisher to the router.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PriceFeedDataV2 {
     pub price_feed_id: PriceFeedId,
@@ -36,7 +37,7 @@ pub struct PriceFeedDataV2 {
 /// Old Represents a binary (bincode-serialized) stream update sent
 /// from the publisher to the router.
 /// Superseded by `PriceFeedData`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PriceFeedDataV1 {
     pub price_feed_id: PriceFeedId,
@@ -75,14 +76,14 @@ impl From<PriceFeedDataV1> for PriceFeedDataV2 {
 
 /// A response sent from the server to the publisher client.
 /// Currently only serde errors are reported back to the client.
-#[derive(Debug, Clone, Serialize, Deserialize, From)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, From)]
 #[serde(tag = "type")]
 #[serde(rename_all = "camelCase")]
 pub enum ServerResponse {
     UpdateDeserializationError(UpdateDeserializationErrorResponse),
 }
 /// Sent to the publisher if the binary data could not be parsed
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateDeserializationErrorResponse {
     pub error: String,
@@ -101,8 +102,8 @@ fn price_feed_data_v1_serde() {
 
     let expected = PriceFeedDataV1 {
         price_feed_id: PriceFeedId(1),
-        source_timestamp_us: TimestampUs(2),
-        publisher_timestamp_us: TimestampUs(3),
+        source_timestamp_us: TimestampUs::from_micros(2),
+        publisher_timestamp_us: TimestampUs::from_micros(3),
         price: Some(Price(4.try_into().unwrap())),
         best_bid_price: Some(Price(5.try_into().unwrap())),
         best_ask_price: Some(Price((2 * 256 + 6).try_into().unwrap())),
@@ -123,8 +124,8 @@ fn price_feed_data_v1_serde() {
     ];
     let expected2 = PriceFeedDataV1 {
         price_feed_id: PriceFeedId(1),
-        source_timestamp_us: TimestampUs(2),
-        publisher_timestamp_us: TimestampUs(3),
+        source_timestamp_us: TimestampUs::from_micros(2),
+        publisher_timestamp_us: TimestampUs::from_micros(3),
         price: Some(Price(4.try_into().unwrap())),
         best_bid_price: None,
         best_ask_price: None,
@@ -150,8 +151,8 @@ fn price_feed_data_v2_serde() {
 
     let expected = PriceFeedDataV2 {
         price_feed_id: PriceFeedId(1),
-        source_timestamp_us: TimestampUs(2),
-        publisher_timestamp_us: TimestampUs(3),
+        source_timestamp_us: TimestampUs::from_micros(2),
+        publisher_timestamp_us: TimestampUs::from_micros(3),
         price: Some(Price(4.try_into().unwrap())),
         best_bid_price: Some(Price(5.try_into().unwrap())),
         best_ask_price: Some(Price((2 * 256 + 6).try_into().unwrap())),
@@ -174,8 +175,8 @@ fn price_feed_data_v2_serde() {
     ];
     let expected2 = PriceFeedDataV2 {
         price_feed_id: PriceFeedId(1),
-        source_timestamp_us: TimestampUs(2),
-        publisher_timestamp_us: TimestampUs(3),
+        source_timestamp_us: TimestampUs::from_micros(2),
+        publisher_timestamp_us: TimestampUs::from_micros(3),
         price: Some(Price(4.try_into().unwrap())),
         best_bid_price: None,
         best_ask_price: None,

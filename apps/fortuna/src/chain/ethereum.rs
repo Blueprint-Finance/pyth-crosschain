@@ -1,8 +1,11 @@
+#![allow(clippy::same_name_method, reason = "generated code")]
+
 use {
     crate::{
         api::ChainId,
         chain::reader::{
-            self, BlockNumber, BlockStatus, EntropyReader, RequestedWithCallbackEvent,
+            self, BlockNumber, BlockStatus, EntropyReader, EntropyRequestInfo,
+            RequestedWithCallbackEvent,
         },
         config::EthereumConfig,
         eth_utils::{
@@ -16,7 +19,7 @@ use {
     axum::async_trait,
     ethers::{
         abi::RawLog,
-        contract::{abigen, EthLogDecode},
+        contract::{abigen, EthLogDecode, LogMeta},
         core::types::Address,
         middleware::{gas_oracle::GasOracleMiddleware, SignerMiddleware},
         prelude::JsonRpcClient,
@@ -32,7 +35,9 @@ use {
 // contract in the same repo.
 abigen!(
     PythRandom,
-    "../../target_chains/ethereum/entropy_sdk/solidity/abis/IEntropy.json"
+    "../../target_chains/ethereum/entropy_sdk/solidity/abis/IEntropy.json";
+    PythRandomErrors,
+    "../../target_chains/ethereum/entropy_sdk/solidity/abis/EntropyErrors.json"
 );
 
 pub type MiddlewaresWrapper<T> = LegacyTxMiddleware<
@@ -83,7 +88,39 @@ impl<T: JsonRpcClient + 'static + Clone> SignablePythContractInner<T> {
         {
             // Extract Log from TransactionReceipt.
             let l: RawLog = r.logs[0].clone().into();
-            if let PythRandomEvents::RequestedFilter(r) = PythRandomEvents::decode_log(&l)? {
+            if let PythRandomEvents::Requested1Filter(r) = PythRandomEvents::decode_log(&l)? {
+                Ok(r.request.sequence_number)
+            } else {
+                Err(anyhow!("No log with sequence number"))
+            }
+        } else {
+            Err(anyhow!("Request failed"))
+        }
+    }
+
+    /// Submit a request for a random number to the contract.
+    ///
+    /// This method is a version of the autogenned `request` method that parses the emitted logs
+    /// to return the sequence number of the created Request.
+    pub async fn request_with_callback_wrapper(
+        &self,
+        provider: &Address,
+        user_randomness: &[u8; 32],
+    ) -> Result<u64> {
+        let fee = self.get_fee(*provider).call().await?;
+
+        if let Some(r) = self
+            .request_with_callback(*provider, *user_randomness)
+            .value(fee)
+            .send()
+            .await?
+            .await?
+        {
+            // Extract Log from TransactionReceipt.
+            let l: RawLog = r.logs[0].clone().into();
+            if let PythRandomEvents::RequestedWithCallbackFilter(r) =
+                PythRandomEvents::decode_log(&l)?
+            {
                 Ok(r.request.sequence_number)
             } else {
                 Err(anyhow!("No log with sequence number"))
@@ -115,7 +152,7 @@ impl<T: JsonRpcClient + 'static + Clone> SignablePythContractInner<T> {
             .await?
             .await?
         {
-            if let PythRandomEvents::RevealedFilter(r) =
+            if let PythRandomEvents::Revealed1Filter(r) =
                 PythRandomEvents::decode_log(&r.logs[0].clone().into())?
             {
                 Ok(r.random_number)
@@ -127,17 +164,17 @@ impl<T: JsonRpcClient + 'static + Clone> SignablePythContractInner<T> {
         }
     }
 
-    pub async fn from_config_and_provider(
+    pub fn from_config_and_provider_and_network_id(
         chain_config: &EthereumConfig,
         private_key: &str,
         provider: Provider<T>,
+        network_id: u64,
     ) -> Result<SignablePythContractInner<T>> {
-        let chain_id = provider.get_chainid().await?;
         let gas_oracle =
             EthProviderOracle::new(provider.clone(), chain_config.priority_fee_multiplier_pct);
         let wallet__ = private_key
             .parse::<LocalWallet>()?
-            .with_chain_id(chain_id.as_u64());
+            .with_chain_id(network_id);
 
         let address = wallet__.address();
 
@@ -152,6 +189,20 @@ impl<T: JsonRpcClient + 'static + Clone> SignablePythContractInner<T> {
             )),
         ))
     }
+
+    pub async fn from_config_and_provider(
+        chain_config: &EthereumConfig,
+        private_key: &str,
+        provider: Provider<T>,
+    ) -> Result<SignablePythContractInner<T>> {
+        let network_id = provider.get_chainid().await?.as_u64();
+        Self::from_config_and_provider_and_network_id(
+            chain_config,
+            private_key,
+            provider,
+            network_id,
+        )
+    }
 }
 
 impl SignablePythContract {
@@ -162,14 +213,20 @@ impl SignablePythContract {
 }
 
 impl InstrumentedSignablePythContract {
-    pub async fn from_config(
+    pub fn from_config(
         chain_config: &EthereumConfig,
         private_key: &str,
         chain_id: ChainId,
         metrics: Arc<RpcMetrics>,
+        network_id: u64,
     ) -> Result<Self> {
         let provider = TracedClient::new(chain_id, &chain_config.geth_rpc_addr, metrics)?;
-        Self::from_config_and_provider(chain_config, private_key, provider).await
+        Self::from_config_and_provider_and_network_id(
+            chain_config,
+            private_key,
+            provider,
+            network_id,
+        )
     }
 }
 
@@ -199,31 +256,31 @@ impl InstrumentedPythContract {
     }
 }
 
+impl<T: JsonRpcClient + 'static> PythRandom<Provider<T>> {
+    pub async fn get_network_id(&self) -> Result<U256> {
+        let chain_id = self.client().get_chainid().await?;
+        Ok(chain_id)
+    }
+}
+
 #[async_trait]
 impl<T: JsonRpcClient + 'static> EntropyReader for PythRandom<Provider<T>> {
-    async fn get_request(
+    async fn get_request_v2(
         &self,
         provider_address: Address,
         sequence_number: u64,
     ) -> Result<Option<reader::Request>> {
-        let r = self
-            .get_request(provider_address, sequence_number)
-            // TODO: This doesn't work for lighlink right now. Figure out how to do this in lightlink
-            // .block(ethers::core::types::BlockNumber::Finalized)
+        let request = self
+            .get_request_v2(provider_address, sequence_number)
             .call()
             .await?;
-
-        // sequence_number == 0 means the request does not exist.
-        if r.sequence_number != 0 {
-            Ok(Some(reader::Request {
-                provider: r.provider,
-                sequence_number: r.sequence_number,
-                block_number: r.block_number,
-                use_blockhash: r.use_blockhash,
-            }))
-        } else {
-            Ok(None)
-        }
+        Ok(Some(reader::Request {
+            provider: request.provider,
+            sequence_number: request.sequence_number,
+            block_number: request.block_number,
+            use_blockhash: request.use_blockhash,
+            callback_status: reader::RequestCallbackStatus::try_from(request.callback_status)?,
+        }))
     }
 
     async fn get_block_number(&self, confirmed_block_status: BlockStatus) -> Result<BlockNumber> {
@@ -244,19 +301,37 @@ impl<T: JsonRpcClient + 'static> EntropyReader for PythRandom<Provider<T>> {
         &self,
         from_block: BlockNumber,
         to_block: BlockNumber,
+        provider: Address,
     ) -> Result<Vec<RequestedWithCallbackEvent>> {
         let mut event = self.requested_with_callback_filter();
-        event.filter = event.filter.from_block(from_block).to_block(to_block);
+        event.filter = event
+            .filter
+            .address(self.address())
+            .from_block(from_block)
+            .to_block(to_block)
+            .topic1(provider);
 
-        let res: Vec<RequestedWithCallbackFilter> = event.query().await?;
-
+        let res: Vec<(RequestedWithCallbackFilter, LogMeta)> = event.query_with_meta().await?;
         Ok(res
-            .iter()
-            .map(|r| RequestedWithCallbackEvent {
+            .into_iter()
+            .map(|(r, meta)| RequestedWithCallbackEvent {
                 sequence_number: r.sequence_number,
                 user_random_number: r.user_random_number,
                 provider_address: r.request.provider,
+                requestor: r.requestor,
+                request: EntropyRequestInfo {
+                    provider: r.request.provider,
+                    sequence_number: r.request.sequence_number,
+                    num_hashes: r.request.num_hashes,
+                    commitment: r.request.commitment,
+                    block_number: r.request.block_number,
+                    requester: r.request.requester,
+                    use_blockhash: r.request.use_blockhash,
+                    is_request_with_callback: r.request.is_request_with_callback,
+                },
+                log_meta: meta,
             })
+            .filter(|r| r.provider_address == provider)
             .collect())
     }
 
