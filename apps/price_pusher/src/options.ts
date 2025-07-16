@@ -94,3 +94,12 @@ export const metricsPort = {
     default: 9090,
   } as Options,
 };
+
+export const apiPort = {
+  "api-port": {
+    description: "Port for API server",
+    type: "number",
+    required: false,
+    default: 3000,
+  } as Options,
+};

@@ -24,6 +24,9 @@ import { filterInvalidPriceItems } from "../utils";
 import { PricePusherMetrics } from "../metrics";
 import { createSolanaBalanceTracker } from "./balance-tracker";
 import { IBalanceTracker } from "../interface";
+import express from "express";
+
+const app = express();
 
 export default {
   command: "solana",
@@ -105,6 +108,7 @@ export default {
     ...options.controllerLogLevel,
     ...options.enableMetrics,
     ...options.metricsPort,
+    ...options.apiPort,
   },
   handler: async function (argv: any) {
     const {
@@ -130,6 +134,7 @@ export default {
       controllerLogLevel,
       enableMetrics,
       metricsPort,
+      apiPort,
     } = argv;
 
     const logger = pino({ level: logLevel });
@@ -271,7 +276,25 @@ export default {
       },
     );
 
-    controller.start();
+    controller.start_listener();
+
+    app.get("/status", (req, res) => {
+      res.json({ message: "Price Controller is running" });
+    });
+
+    app.post("/update-prices", express.json(), (req, res) => {
+      const priceIds: string[] = req.body.priceIds;
+      if (!priceIds || !Array.isArray(priceIds)) {
+        return res.status(400).json({ error: "Invalid priceIds format" });
+      }
+      console.log("Received price update request for:", priceIds);
+      controller.start_update_oracle(priceIds);
+      res.json({ message: "Price update is running", priceIds });
+    });
+
+    app.listen(apiPort, () => {
+      console.log(`Server running at http://localhost:${apiPort}`);
+    });
   },
 };
 
